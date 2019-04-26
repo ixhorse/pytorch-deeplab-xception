@@ -112,8 +112,8 @@ class MobileNetV2(nn.Module):
         if pretrained:
             self._load_pretrained_model()
 
-        self.low_level_features = self.features[0:4]
-        self.high_level_features = self.features[4:]
+        self.low_level_features = self.features[0:7]
+        self.high_level_features = self.features[7:]
 
     def forward(self, x):
         low_level_feat = self.low_level_features(x)

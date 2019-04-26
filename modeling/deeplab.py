@@ -6,9 +6,11 @@ from modeling.aspp import build_aspp
 from modeling.decoder import build_decoder
 from modeling.backbone import build_backbone
 
+import pdb
+
 class DeepLab(nn.Module):
     def __init__(self, backbone='resnet', output_stride=16, num_classes=21,
-                 sync_bn=True, freeze_bn=False):
+                 sync_bn=False, freeze_bn=False):
         super(DeepLab, self).__init__()
         if backbone == 'drn':
             output_stride = 8
@@ -20,16 +22,27 @@ class DeepLab(nn.Module):
 
         self.backbone = build_backbone(backbone, output_stride, BatchNorm)
         self.aspp = build_aspp(backbone, output_stride, BatchNorm)
-        self.decoder = build_decoder(num_classes, backbone, BatchNorm)
+        self.link_conv = nn.Sequential(nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias=False),
+                                       BatchNorm(32),
+                                       nn.ReLU(),
+                                       nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias=False),
+                                       nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+        self.last_conv = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                       BatchNorm(256),
+                                       nn.ReLU(),
+                                       nn.Dropout(0.1),
+                                       nn.Conv2d(256, num_classes, kernel_size=1, stride=1))
 
+        self._init_weight()
         if freeze_bn:
             self.freeze_bn()
 
     def forward(self, input):
         x, low_level_feat = self.backbone(input)
+        low_level_feat = self.link_conv(low_level_feat)
+        x = torch.cat((x, low_level_feat), dim=1)
         x = self.aspp(x)
-        x = self.decoder(x, low_level_feat)
-        x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
+        x = self.last_conv(x)
 
         return x
 
@@ -51,7 +64,8 @@ class DeepLab(nn.Module):
                             yield p
 
     def get_10x_lr_params(self):
-        modules = [self.aspp, self.decoder]
+        # modules = [self.aspp, self.decoder]
+        modules = [self.aspp, self.last_conv]
         for i in range(len(modules)):
             for m in modules[i].named_modules():
                 if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
@@ -60,6 +74,16 @@ class DeepLab(nn.Module):
                         if p.requires_grad:
                             yield p
 
+    def _init_weight(self):
+        for m in self.last_conv.modules():
+            if isinstance(m, nn.Conv2d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, SynchronizedBatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
 if __name__ == "__main__":
     model = DeepLab(backbone='mobilenet', output_stride=16)

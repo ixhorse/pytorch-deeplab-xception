@@ -14,6 +14,8 @@ from utils.saver import Saver
 from utils.summaries import TensorboardSummary
 from utils.metrics import Evaluator
 
+import pdb
+
 class Trainer(object):
     def __init__(self, args):
         self.args = args
@@ -26,7 +28,7 @@ class Trainer(object):
         self.writer = self.summary.create_summary()
         
         # Define Dataloader
-        kwargs = {'num_workers': args.workers, 'pin_memory': True}
+        kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
         self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
 
         # Define network
@@ -52,6 +54,7 @@ class Trainer(object):
             else:
                 weight = calculate_weigths_labels(args.dataset, self.train_loader, self.nclass)
             weight = torch.from_numpy(weight.astype(np.float32))
+            print(weight)
         else:
             weight = None
         self.criterion = SegmentationLosses(weight=weight, cuda=args.cuda).build_loss(mode=args.loss_type)
@@ -135,7 +138,7 @@ class Trainer(object):
         tbar = tqdm(self.val_loader, desc='\r')
         test_loss = 0.0
         for i, sample in enumerate(tbar):
-            image, target = sample['image'], sample['label']
+            image, target, path = sample['image'], sample['label'], sample['path']
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
@@ -147,21 +150,26 @@ class Trainer(object):
             target = target.cpu().numpy()
             pred = np.argmax(pred, axis=1)
             # Add batch sample into evaluator
-            self.evaluator.add_batch(target, pred)
+            self.evaluator.add_batch(target, pred, path)
 
         # Fast test during the training
         Acc = self.evaluator.Pixel_Accuracy()
         Acc_class = self.evaluator.Pixel_Accuracy_Class()
         mIoU = self.evaluator.Mean_Intersection_over_Union()
         FWIoU = self.evaluator.Frequency_Weighted_Intersection_over_Union()
+        RRecall = self.evaluator.Region_Recall()
+        RNum = self.evaluator.Region_Num()
         self.writer.add_scalar('val/total_loss_epoch', test_loss, epoch)
         self.writer.add_scalar('val/mIoU', mIoU, epoch)
         self.writer.add_scalar('val/Acc', Acc, epoch)
         self.writer.add_scalar('val/Acc_class', Acc_class, epoch)
         self.writer.add_scalar('val/fwIoU', FWIoU, epoch)
+        self.writer.add_scalar('val/RRecall', RRecall, epoch)
+        self.writer.add_scalar('val/RNum', RNum, epoch)
         print('Validation:')
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + image.data.shape[0]))
-        print("Acc:{}, Acc_class:{}, mIoU:{}, fwIoU: {}".format(Acc, Acc_class, mIoU, FWIoU))
+        print("Acc:{:.4f}, Acc_class:{:.4f}, mIoU:{:.4f}, fwIoU: {:.4f}, RRecall: {:.4f}, : RNum: {:.4f}"
+            .format(Acc, Acc_class, mIoU, FWIoU, RRecall, RNum))
         print('Loss: %.3f' % test_loss)
 
         new_pred = mIoU
@@ -183,9 +191,9 @@ def main():
     parser.add_argument('--out-stride', type=int, default=16,
                         help='network output stride (default: 8)')
     parser.add_argument('--dataset', type=str, default='pascal',
-                        choices=['pascal', 'coco', 'cityscapes'],
+                        choices=['pascal', 'coco', 'cityscapes', 'tt100k'],
                         help='dataset name (default: pascal)')
-    parser.add_argument('--use-sbd', action='store_true', default=True,
+    parser.add_argument('--use-sbd', action='store_true',
                         help='whether to use SBD dataset (default: True)')
     parser.add_argument('--workers', type=int, default=4,
                         metavar='N', help='dataloader threads')
@@ -281,6 +289,7 @@ def main():
             'coco': 0.1,
             'cityscapes': 0.01,
             'pascal': 0.007,
+            'tt100k': 0.001,
         }
         args.lr = lrs[args.dataset.lower()] / (4 * len(args.gpu_ids)) * args.batch_size
 

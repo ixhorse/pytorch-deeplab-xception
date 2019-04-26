@@ -163,3 +163,19 @@ class FixedResize(object):
 
         return {'image': img,
                 'label': mask}
+
+class FixedNoMaskResize(object):
+    def __init__(self, size):
+        self.size = (size, size)  # size: (h, w)
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+
+        w, h = img.size
+        assert w == h
+
+        img = img.resize(self.size, Image.BILINEAR)
+
+        return {'image': img,
+                'label': mask}

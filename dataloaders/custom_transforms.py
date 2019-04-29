@@ -2,7 +2,8 @@ import torch
 import random
 import numpy as np
 
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+from torchvision.transforms import ColorJitter
 
 class Normalize(object):
     """Normalize a tensor image with mean and standard deviation.
@@ -46,6 +47,18 @@ class ToTensor(object):
                 'label': mask}
 
 
+class RandomColorJeter(object):
+    def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
+        self.tr = ColorJitter(brightness, contrast, saturation, hue)
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        img = self.tr(img)
+        return {'image': img,
+                'label': mask}
+
+
 class RandomHorizontalFlip(object):
     def __call__(self, sample):
         img = sample['image']
@@ -79,7 +92,7 @@ class RandomGaussianBlur(object):
         mask = sample['label']
         if random.random() < 0.5:
             img = img.filter(ImageFilter.GaussianBlur(
-                radius=random.random()))
+                radius=1))
 
         return {'image': img,
                 'label': mask}

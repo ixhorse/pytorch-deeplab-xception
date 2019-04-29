@@ -22,11 +22,10 @@ class DeepLab(nn.Module):
 
         self.backbone = build_backbone(backbone, output_stride, BatchNorm)
         self.aspp = build_aspp(backbone, output_stride, BatchNorm)
-        self.link_conv = nn.Sequential(nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias=False),
-                                       BatchNorm(32),
+        self.link_conv = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                                       BatchNorm(64),
                                        nn.ReLU(),
-                                       nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias=False),
-                                       nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+                                       nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False))
         self.last_conv = nn.Sequential(nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
                                        BatchNorm(256),
                                        nn.ReLU(),
@@ -39,6 +38,7 @@ class DeepLab(nn.Module):
 
     def forward(self, input):
         x, low_level_feat = self.backbone(input)
+        # x = F.interpolate(x, size=low_level_feat.size()[2:], mode='bilinear', align_corners=True)
         low_level_feat = self.link_conv(low_level_feat)
         x = torch.cat((x, low_level_feat), dim=1)
         x = self.aspp(x)
@@ -65,7 +65,7 @@ class DeepLab(nn.Module):
 
     def get_10x_lr_params(self):
         # modules = [self.aspp, self.decoder]
-        modules = [self.aspp, self.last_conv]
+        modules = [self.aspp, self.last_conv, self.link_conv]
         for i in range(len(modules)):
             for m in modules[i].named_modules():
                 if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \

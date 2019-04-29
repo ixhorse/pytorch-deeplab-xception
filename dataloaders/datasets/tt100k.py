@@ -86,6 +86,7 @@ class TT100KSegmentation(Dataset):
     def transform_tr(self, sample):
         composed_transforms = transforms.Compose([
             tr.FixedNoMaskResize(size=self.args.crop_size),
+            tr.RandomColorJeter(0.3, 0.3, 0.3, 0.3),
             tr.RandomHorizontalFlip(),
             # tr.RandomScaleCrop(base_size=self.args.base_size, crop_size=self.args.crop_size),
             tr.RandomGaussianBlur(),

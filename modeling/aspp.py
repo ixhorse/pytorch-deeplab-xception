@@ -37,7 +37,7 @@ class ASPP(nn.Module):
         if backbone == 'drn':
             inplanes = 512
         elif backbone == 'mobilenet':
-            inplanes = 320+32
+            inplanes = 320+128
         else:
             inplanes = 2048
         if output_stride == 16:

@@ -56,7 +56,7 @@ class Trainer(object):
             weight = torch.from_numpy(weight.astype(np.float32))
             print(weight)
         else:
-            weight = None
+            weight = torch.tensor([5, 5]).float()
         self.criterion = SegmentationLosses(weight=weight, cuda=args.cuda).build_loss(mode=args.loss_type)
         self.model, self.optimizer = model, optimizer
         
@@ -172,16 +172,17 @@ class Trainer(object):
             .format(Acc, Acc_class, mIoU, FWIoU, RRecall, RNum))
         print('Loss: %.3f' % test_loss)
 
-        new_pred = mIoU
+        is_best = False
+        new_pred = 2 / ( 1 / mIoU + 1 / RRecall)
         if new_pred > self.best_pred:
             is_best = True
             self.best_pred = new_pred
-            self.saver.save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': self.model.module.state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-                'best_pred': self.best_pred,
-            }, is_best)
+        self.saver.save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': self.model.module.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'best_pred': self.best_pred,
+        }, is_best)
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training")

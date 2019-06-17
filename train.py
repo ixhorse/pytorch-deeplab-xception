@@ -192,7 +192,6 @@ def main():
     parser.add_argument('--out-stride', type=int, default=16,
                         help='network output stride (default: 8)')
     parser.add_argument('--dataset', type=str, default='pascal',
-                        choices=['pascal', 'coco', 'cityscapes', 'tt100k'],
                         help='dataset name (default: pascal)')
     parser.add_argument('--use-sbd', action='store_true',
                         help='whether to use SBD dataset (default: True)')
@@ -200,7 +199,7 @@ def main():
                         metavar='N', help='dataloader threads')
     parser.add_argument('--base-size', type=int, default=513,
                         help='base image size')
-    parser.add_argument('--crop-size', type=int, default=513,
+    parser.add_argument('--crop-size', type=str, default='640, 480',
                         help='crop image size')
     parser.add_argument('--sync-bn', type=bool, default=None,
                         help='whether to use sync bn (default: auto)')
@@ -257,6 +256,9 @@ def main():
                         help='skip validation during training')
 
     args = parser.parse_args()
+
+    args.crop_size = tuple([int(s) for s in args.crop_size.split(',')])
+
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
         try:
